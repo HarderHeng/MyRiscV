@@ -1,0 +1,10 @@
+sim/out/
+syn/out/
+*.vcd
+*.fst
+*.vvp
+*.log
+sw/test/*.elf
+sw/test/*.bin
+sw/test/*.hex
+*.DS_Store

@@ -5,8 +5,8 @@ RTL_DIR = rtl
 SIM_DIR = sim
 SYN_DIR = syn
 
-# include 路径（iverilog 格式）
-INCDIRS = +incdir+$(RTL_DIR)/alu +incdir+$(RTL_DIR)/core
+# include 路径（iverilog 格式：OSS CAD Suite iverilog 使用 -I，不支持 +incdir+）
+INCDIRS = -I$(RTL_DIR)/alu -I$(RTL_DIR)/core
 
 # include 路径（Yosys 格式，使用 -I）
 INCDIRS_YOSYS = -I$(RTL_DIR)/alu -I$(RTL_DIR)/core

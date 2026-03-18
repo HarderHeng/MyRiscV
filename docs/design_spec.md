@@ -454,10 +454,10 @@ MyRiscV/
 - [x] 生成 JTAG DTM（符合 Debug Spec）
 - [x] 生成 Debug Module（符合 Debug Spec）
 - [x] 生成 UART、SimRAM、SoC 顶层、Testbench
-- [ ] **代码审查**：检查接口匹配、信号位宽、include 路径
-- [ ] **修复已知 Bug**（旧代码遗留问题）
-- [ ] **iverilog 编译**：无语法/类型错误
-- [ ] **仿真运行**：`sim/out/tb_soc.vcd` 波形正确，UART 输出 "Hello!\n"
+- [x] **代码审查**：检查接口匹配、信号位宽、include 路径
+- [x] **修复已知 Bug**（旧代码遗留问题）
+- [x] **iverilog 编译**：无语法/类型错误
+- [x] **仿真运行**：`sim/out/tb_soc.vcd` 波形正确，UART 输出 "Hello!\n"
 
 ### Phase 2：FPGA 实现
 
@@ -536,9 +536,9 @@ Step 4：机器码验证
 ### 13.1 仿真命令
 
 ```bash
-# 编译 SoC 仿真
+# 编译 SoC 仿真（OSS CAD Suite iverilog 使用 -I，不支持 +incdir+）
 iverilog -g2012 \
-    +incdir+rtl/alu +incdir+rtl/core \
+    -Irtl/alu -Irtl/core \
     rtl/alu/alu.sv \
     rtl/core/regfile.sv rtl/core/if.sv rtl/core/if_id.sv \
     rtl/core/id.sv rtl/core/id_ex.sv rtl/core/ex.sv \

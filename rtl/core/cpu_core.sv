@@ -72,8 +72,20 @@ module CpuCore (
     wire        ex_jmp;
     wire [31:0] ex_jmp_addr;
 
-    // IF 暂停：Load-use stall 或 调试 halt
-    wire if_hold = load_use_stall | dbg_halted;
+    // IRAM 同步读等待：复位后等 1 周期；EX 跳转后等 1 周期
+    // 确保 SDPB/行为模型同步输出在 IFID 寄存器采样前已稳定
+    reg iram_wait;
+    always @(posedge clk) begin
+        if (rst)
+            iram_wait <= 1'b1;
+        else if (iram_wait)
+            iram_wait <= 1'b0;
+        else if (ex_jmp && !load_use_stall && !dbg_halted)
+            iram_wait <= 1'b1;
+    end
+
+    // IF 暂停：Load-use stall 或 调试 halt 或 IRAM 等待
+    wire if_hold = load_use_stall | dbg_halted | iram_wait;
 
     // IF/ID 冲刷：分支成立时冲刷（但 load_use_stall 优先，避免误冲刷）
     wire ifid_flush = branch_flush && !load_use_stall;
@@ -93,7 +105,7 @@ module CpuCore (
         .pc       (if_pc)
     );
 
-    // 指令存储器地址 = 当前 PC（组合读）
+    // 指令存储器地址 = 当前 PC（组合驱动 IRAM 地址）
     assign iram_addr = if_pc;
     assign dbg_pc    = if_pc;
 
@@ -108,7 +120,7 @@ module CpuCore (
         .rst     (rst),
         .flush   (ifid_flush),
         .hold    (if_hold),
-        .if_pc   (if_pc),
+        .if_pc   (if_pc),      // 直接使用当前 PC（iram_wait hold 住时 PC 不推进，对齐同步读）
         .if_inst (iram_rdata),
         .id_pc   (id_pc),
         .id_inst (id_inst)

@@ -30,6 +30,7 @@ SIM_SRCS = \
     $(RTL_DIR)/perips/uart.sv \
     $(RTL_DIR)/perips/iram.sv \
     $(RTL_DIR)/perips/dram.sv \
+    $(RTL_DIR)/perips/flash_ctrl.sv \
     $(RTL_DIR)/soc/MyRiscV_soc_top.sv
 
 # RTL 源文件列表（FPGA 综合用，同 SIM_SRCS）
@@ -73,7 +74,7 @@ synth: $(SYN_DIR)/out/$(PROJ).json
 
 $(SYN_DIR)/out/$(PROJ).json: $(SYN_SRCS)
 	@mkdir -p $(SYN_DIR)/out
-	yosys -p "verilog_defaults -add -I$(RTL_DIR)/alu -I$(RTL_DIR)/core; \
+	yosys -p "verilog_defaults -add -I$(RTL_DIR)/alu -I$(RTL_DIR)/core -DSYNTHESIS; \
 	    read_verilog -sv $^; \
 	    synth_gowin -top $(TOPMOD) -json $@"
 

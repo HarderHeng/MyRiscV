@@ -3,12 +3,13 @@
 
 // ============================================================
 //  MyRiscV SoC 顶层
-//  连接：CpuCore、IRAM、DRAM、UART、JtagDTM、DebugModule
+//  连接：CpuCore、IRAM、DRAM、UART、JtagDTM、DebugModule、FlashCtrl
 //
 //  地址映射：
 //    0x80000000 ~ 0x80003FFF  IRAM 16KB（FPGA BSRAM×8）
 //    0x80004000 ~ 0x80005FFF  DRAM  8KB（FPGA BSRAM×4）
 //    0x10000000 ~ 0x1000001F  UART
+//    0x20000000 ~ 0x2012FFFF  Flash 76KB（片上 FLASH608K）
 //    其他：返回 0
 //
 //  调试链路：
@@ -84,8 +85,10 @@ wire [31:0] dm_sba_wdata;
 wire [31:0] dm_sba_rdata;
 wire        dm_sba_rdata_vld;
 
-// SBA 读数据在同周期有效（IRAM/DRAM 组合读），始终有效
-assign dm_sba_rdata_vld = dm_sba_ren;
+// SBA 读数据在次周期有效（IRAM/DRAM 同步读，延迟 1 周期）
+reg dm_sba_rdata_vld_r;
+always @(posedge clk) dm_sba_rdata_vld_r <= dm_sba_ren;
+assign dm_sba_rdata_vld = dm_sba_rdata_vld_r;
 
 // ---------------------------------------------------------
 //  CPU 核心例化
@@ -194,6 +197,9 @@ wire sel_uart = (dbus_addr[31:12] == 20'h1_0000);
 // DRAM：addr[31:13] == 19'h4_0002  (0x80004000 ~ 0x80005FFF)
 wire sel_dram = (dbus_addr[31:13] == 19'h4_0002);
 
+// Flash：0x20000000 ~ 0x2012FFFF（76KB 用户区，addr[31:17] == 15'h1000）
+wire sel_flash = (dbus_addr[31:17] == 15'h1000);
+
 // SBA 地址译码（DebugModule 系统总线访问路由）
 wire sel_iram_dbg = (dm_sba_addr[31:14] == 18'h2_0000);
 wire sel_dram_dbg = (dm_sba_addr[31:13] == 19'h4_0002);
@@ -268,12 +274,28 @@ UART u_uart (
 );
 
 // ---------------------------------------------------------
+//  FlashCtrl 例化（76KB 片上 Flash，0x20000000）
+// ---------------------------------------------------------
+wire [31:0] flash_rdata;
+wire        flash_rdata_vld;
+
+FlashCtrl u_flash_ctrl (
+    .clk           (clk),
+    .rst           (rst),
+    .cpu_addr      (dbus_addr),
+    .cpu_ren       (dbus_ren & sel_flash),
+    .cpu_rdata     (flash_rdata),
+    .cpu_rdata_vld (flash_rdata_vld)
+);
+
+// ---------------------------------------------------------
 //  数据总线读数据 MUX（组合逻辑）
-//  根据地址选择 UART、IRAM 或 DRAM 的读数据
+//  根据地址选择 UART、IRAM、DRAM 或 Flash 的读数据
 // ---------------------------------------------------------
 assign dbus_rdata = sel_uart  ? uart_rdata  :
                     sel_iram  ? iram_drdata :
                     sel_dram  ? dram_drdata :
+                    sel_flash ? flash_rdata :
                                 32'h0000_0000;
 
 // ---------------------------------------------------------

@@ -8,7 +8,7 @@
 
 `include "alu.svh"
 
-module ALU (
+module RvALU (
     input  wire [3:0]  alu_op,   // ALU 操作码
     input  wire [31:0] src1,     // 操作数1
     input  wire [31:0] src2,     // 操作数2

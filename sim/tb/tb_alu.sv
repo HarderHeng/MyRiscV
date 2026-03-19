@@ -22,7 +22,7 @@ integer pass_cnt;
 integer fail_cnt;
 
 // DUT 例化
-ALU u_alu (
+RvALU u_alu (
     .alu_op (alu_op),
     .src1   (src1),
     .src2   (src2),

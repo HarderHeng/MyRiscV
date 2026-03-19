@@ -56,7 +56,7 @@ module Execute (
     // -------------------------------------------------------
     wire [31:0] alu_out;  // ALU 计算结果
 
-    ALU u_alu (
+    RvALU u_alu (
         .alu_op (alu_op),
         .src1   (alu_src1),
         .src2   (alu_src2),

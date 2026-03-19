@@ -11,7 +11,7 @@ INCDIRS = -I$(RTL_DIR)/alu -I$(RTL_DIR)/core
 # include 路径（Yosys 格式，使用 -I）
 INCDIRS_YOSYS = -I$(RTL_DIR)/alu -I$(RTL_DIR)/core
 
-# RTL 源文件列表（仿真用，含 SimRAM；不含 iram/dram/timer）
+# RTL 源文件列表（仿真和综合共用，使用 IRAM+DRAM）
 SIM_SRCS = \
     $(RTL_DIR)/alu/alu.sv \
     $(RTL_DIR)/core/regfile.sv \
@@ -28,11 +28,11 @@ SIM_SRCS = \
     $(RTL_DIR)/debug/jtag_dtm.sv \
     $(RTL_DIR)/debug/debug_module.sv \
     $(RTL_DIR)/perips/uart.sv \
-    $(RTL_DIR)/perips/sim_ram.sv \
+    $(RTL_DIR)/perips/iram.sv \
+    $(RTL_DIR)/perips/dram.sv \
     $(RTL_DIR)/soc/MyRiscV_soc_top.sv
 
-# RTL 源文件列表（FPGA 综合用，替换 SimRAM 为 IRAM+DRAM）
-# Phase 2 时启用，暂时与 SIM_SRCS 相同
+# RTL 源文件列表（FPGA 综合用，同 SIM_SRCS）
 SYN_SRCS = $(SIM_SRCS)
 
 SIM_OUT_DIR = $(SIM_DIR)/out
@@ -73,7 +73,9 @@ synth: $(SYN_DIR)/out/$(PROJ).json
 
 $(SYN_DIR)/out/$(PROJ).json: $(SYN_SRCS)
 	@mkdir -p $(SYN_DIR)/out
-	yosys $(INCDIRS_YOSYS) -p "synth_gowin -top $(TOPMOD) -json $@" $^
+	yosys -p "verilog_defaults -add -I$(RTL_DIR)/alu -I$(RTL_DIR)/core; \
+	    read_verilog -sv $^; \
+	    synth_gowin -top $(TOPMOD) -json $@"
 
 pnr: $(SYN_DIR)/out/$(PROJ)_pnr.json
 

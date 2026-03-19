@@ -1,6 +1,6 @@
 # MyRiscV SoC 设计规格说明书
 
-> 版本：v0.2 | 更新时间：2026-03-18
+> 版本：v0.3 | 更新时间：2026-03-19
 
 ---
 
@@ -464,11 +464,22 @@ MyRiscV/
 **目标：** 综合通过，FPGA 板上跑通 UART 输出 + JTAG 调试
 
 **任务：**
-- [ ] 将 SimRAM 替换为 IRAM + DRAM（独立模块，BSRAM 推断）
-- [ ] Yosys 综合：`synth_gowin -bsram`，无错误警告
+- [x] 将 SimRAM 替换为 IRAM + DRAM（独立模块，BSRAM 推断）
+  - `rtl/perips/iram.sv`：16KB，三端口（IF/Data/Debug），`$readmemh` 初始化
+  - `rtl/perips/dram.sv`：8KB，双端口（Data/Debug），字节使能写
+  - `rtl/perips/iram_init.mem`：Hello!\n 程序机器码（hex 格式）
+  - `rtl/soc/MyRiscV_soc_top.sv`：完成 IRAM+DRAM+UART+JTAG 全系统连接
+- [x] `alu.sv` 模块名改为 `RvALU`（避免与 Gowin 原语 `ALU` 冲突）
+- [x] `Makefile` 综合命令更正为正确的 Yosys 调用格式
+- [ ] Yosys 综合无错误（进行中）
 - [ ] nextpnr 布局布线：满足 27 MHz 时序
 - [ ] openFPGALoader 烧录验证
 - [ ] OpenOCD 连接 JTAG，验证 halt/resume/寄存器读写/内存读写
+
+**已知待解决（Phase 2 后续）：**
+- [ ] JTAG 部分：完善 abstract command、progbuf 执行、单步调试
+- [ ] Flash 控制器：实现 Gowin `Flash_DP` 封装，让 CPU 可读写片上 Flash
+- [ ] 实现标准 MCU 烧录流程：通过 JTAG 将程序写入 Flash，上电从 Flash 引导
 
 ### Phase 3：Flash 控制器
 
@@ -493,26 +504,32 @@ MyRiscV/
 
 ---
 
-## 11. 立即下一步（Phase 1 剩余工作）
+## 11. 立即下一步（Phase 2 进行中）
 
-按以下顺序完成 Phase 1：
+Phase 2 核心目标：让 SoC 像普通 MCU 一样可以通过 JTAG 烧录并运行。
 
 ```
-Step 1：代码审查
-  - 检查所有生成文件的 include 路径
-  - 检查模块端口名称匹配（cpu_core ↔ jtag_dtm ↔ debug_module ↔ soc_top）
-  - 检查 sim_ram 机器码是否正确
+Step 1：完成 Yosys 综合（当前）
+  make synth
+  → 目标：无 ERROR，BSRAM 正确推断 12 块（IRAM×8 + DRAM×4）
 
-Step 2：iverilog 编译
-  make sim_soc
-  → 修复所有编译错误
+Step 2：nextpnr 布局布线
+  make pnr
+  → 目标：满足 27 MHz，利用率 <60% LUT
 
-Step 3：仿真运行
-  vvp sim/out/tb_soc
-  → 观察波形，确认 UART 输出 "Hello!\n"
+Step 3：打包 + 烧录比特流
+  make bitstream && make prog
+  → 板上 UART 输出 "Hello!\n"
 
-Step 4：机器码验证
-  → 使用 RISC-V 反汇编工具验证 sim_ram.sv 中的机器码正确
+Step 4：JTAG 调试验证
+  openocd -f openocd.cfg
+  (gdb) target remote :3333
+  → halt / info reg / x/4i $pc
+
+Step 5：完善 JTAG + Flash 引导（Phase 2 后期）
+  - 完善 debug_module.sv（abstract command 完整实现）
+  - 实现 flash_ctrl.sv（Gowin Flash_DP 原语，地址 0x20000000）
+  - 实现"JTAG 写 Flash + 上电 Flash 引导" MCU 烧录流程
 ```
 
 ---
@@ -525,9 +542,10 @@ Step 4：机器码验证
 | `alu.sv`（旧）     | L32,35   | SRL/SRA 互换（新版本已正确实现）            | 已修复 |
 | `core_define.svh`（旧）| -    | 缺少 InstAddrWidth/InstWidth（新版本已补充）| 已修复 |
 | `id.sv`（旧）      | L111     | 符号扩展位索引错误（新版本重写）             | 已修复 |
+| `alu.sv`           | 模块名   | 原名 `ALU` 与 Gowin 原语冲突，改为 `RvALU` | 已修复 |
 | `wb.sv`            | -        | 旧空文件存在，与新版本的 WB 内联设计冲突    | 待确认 |
 | `jtag_dm.sv`       | -        | 旧空文件存在，已由新的 jtag_dtm.sv 替代     | 待清理 |
-| `ram.sv`, `rom.sv` | -        | 旧空文件存在，已由 sim_ram.sv 替代          | 待清理 |
+| `ram.sv`, `rom.sv` | -        | 旧空文件存在，已由 iram.sv/dram.sv 替代     | 待清理 |
 
 ---
 

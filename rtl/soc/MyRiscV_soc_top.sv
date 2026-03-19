@@ -3,18 +3,18 @@
 
 // ============================================================
 //  MyRiscV SoC 顶层
-//  连接：CpuCore、SimRAM、UART、JtagDTM、DebugModule
+//  连接：CpuCore、IRAM、DRAM、UART、JtagDTM、DebugModule
 //
 //  地址映射：
-//    0x80000000 ~ 0x80003FFF  IRAM（16KB，在 SimRAM 低 16KB）
-//    0x80004000 ~ 0x80007FFF  DRAM（16KB，在 SimRAM 高 16KB）
+//    0x80000000 ~ 0x80003FFF  IRAM 16KB（FPGA BSRAM×8）
+//    0x80004000 ~ 0x80005FFF  DRAM  8KB（FPGA BSRAM×4）
 //    0x10000000 ~ 0x1000001F  UART
 //    其他：返回 0
 //
 //  调试链路：
 //    JtagDTM  ←DMI总线→  DebugModule  ←CPU调试接口→  CpuCore
 //                              ↓SBA总线
-//                           SimRAM 调试端口
+//                           IRAM/DRAM 调试端口（地址路由）
 // ============================================================
 module MyRiscV_soc_top (
     input  wire        clk,
@@ -84,7 +84,7 @@ wire [31:0] dm_sba_wdata;
 wire [31:0] dm_sba_rdata;
 wire        dm_sba_rdata_vld;
 
-// SBA 读数据在同周期有效（SimRAM 组合读），始终有效
+// SBA 读数据在同周期有效（IRAM/DRAM 组合读），始终有效
 assign dm_sba_rdata_vld = dm_sba_ren;
 
 // ---------------------------------------------------------
@@ -141,7 +141,7 @@ JtagDTM u_jtag_dtm (
 
 // ---------------------------------------------------------
 //  DebugModule 例化
-//  接收来自 JtagDTM 的 DMI 请求，控制 CpuCore 并通过 SBA 访问 SimRAM
+//  接收来自 JtagDTM 的 DMI 请求，控制 CpuCore 并通过 SBA 访问 IRAM/DRAM
 // ---------------------------------------------------------
 DebugModule u_debug_module (
     .clk            (clk),
@@ -167,7 +167,7 @@ DebugModule u_debug_module (
     .dbg_reg_wdata  (dbg_reg_wdata),
     .dbg_pc         (/* 输出，DebugModule 内部透传 cpu_pc 的只读端口，不需要连接 */),
     .cpu_pc         (dbg_pc),
-    // System Bus Access（连接到 SimRAM 调试端口）
+    // System Bus Access（连接到 IRAM/DRAM 调试端口）
     .sba_addr       (dm_sba_addr),
     .sba_ren        (dm_sba_ren),
     .sba_wen        (dm_sba_wen),
@@ -178,43 +178,75 @@ DebugModule u_debug_module (
 );
 
 // ---------------------------------------------------------
-//  SimRAM 例化（仿真用 IRAM+DRAM 合一）
+//  IRAM 例化（16KB，0x80000000 ~ 0x80003FFF）
 // ---------------------------------------------------------
-wire [31:0] sim_ram_drdata;
-wire [31:0] sim_ram_dbg_rdata;
+wire [31:0] iram_drdata;
+wire [31:0] iram_dbg_rdata;
 
-// 地址译码（组合逻辑）
-// SimRAM 地址范围：0x80000000 ~ 0x80007FFF
-//   addr[31:15] == 17'h1_0000
-wire sel_sim_ram = (dbus_addr[31:15] == 17'h1_0000);
+// 地址译码
+// IRAM：addr[31:14] == 18'h2_0000  (0x80000000 ~ 0x80003FFF)
+wire sel_iram = (dbus_addr[31:14] == 18'h2_0000);
 
 // UART 地址范围：0x10000000 ~ 0x1000001F
 //   addr[31:12] == 20'h1_0000
-wire sel_uart    = (dbus_addr[31:12] == 20'h1_0000);
+wire sel_uart = (dbus_addr[31:12] == 20'h1_0000);
 
-SimRAM u_sim_ram (
+// DRAM：addr[31:13] == 19'h4_0002  (0x80004000 ~ 0x80005FFF)
+wire sel_dram = (dbus_addr[31:13] == 19'h4_0002);
+
+// SBA 地址译码（DebugModule 系统总线访问路由）
+wire sel_iram_dbg = (dm_sba_addr[31:14] == 18'h2_0000);
+wire sel_dram_dbg = (dm_sba_addr[31:13] == 19'h4_0002);
+
+IRAM u_iram (
     .clk        (clk),
-    // 指令端口（来自 CPU IF）
+    // 指令端口（来自 CPU IF，始终连接）
     .iaddr      (iram_addr),
     .idata      (iram_rdata),
-    // 数据端口（来自 CPU MEM 阶段）
+    // 数据端口（来自 CPU MEM）
     .daddr      (dbus_addr),
-    .dren       (dbus_ren  & sel_sim_ram),
-    .dwen       (dbus_wen  & sel_sim_ram),
+    .dren       (dbus_ren  & sel_iram),
+    .dwen       (dbus_wen  & sel_iram),
     .dbe        (dbus_be),
     .dwdata     (dbus_wdata),
-    .drdata     (sim_ram_drdata),
+    .drdata     (iram_drdata),
     // 调试端口（来自 DebugModule SBA）
     .dbg_addr   (dm_sba_addr),
-    .dbg_ren    (dm_sba_ren),
-    .dbg_wen    (dm_sba_wen),
+    .dbg_ren    (dm_sba_ren  & sel_iram_dbg),
+    .dbg_wen    (dm_sba_wen  & sel_iram_dbg),
     .dbg_be     (dm_sba_be),
     .dbg_wdata  (dm_sba_wdata),
-    .dbg_rdata  (sim_ram_dbg_rdata)
+    .dbg_rdata  (iram_dbg_rdata)
 );
 
-// DebugModule SBA 读数据回路（仅 SimRAM 范围）
-assign dm_sba_rdata = sim_ram_dbg_rdata;
+// ---------------------------------------------------------
+//  DRAM 例化（8KB，0x80004000 ~ 0x80005FFF）
+// ---------------------------------------------------------
+wire [31:0] dram_drdata;
+wire [31:0] dram_dbg_rdata;
+
+DRAM u_dram (
+    .clk        (clk),
+    // 数据端口（来自 CPU MEM）
+    .daddr      (dbus_addr),
+    .dren       (dbus_ren  & sel_dram),
+    .dwen       (dbus_wen  & sel_dram),
+    .dbe        (dbus_be),
+    .dwdata     (dbus_wdata),
+    .drdata     (dram_drdata),
+    // 调试端口（来自 DebugModule SBA）
+    .dbg_addr   (dm_sba_addr),
+    .dbg_ren    (dm_sba_ren  & sel_dram_dbg),
+    .dbg_wen    (dm_sba_wen  & sel_dram_dbg),
+    .dbg_be     (dm_sba_be),
+    .dbg_wdata  (dm_sba_wdata),
+    .dbg_rdata  (dram_dbg_rdata)
+);
+
+// DebugModule SBA 读数据回路（按地址路由到 IRAM 或 DRAM）
+assign dm_sba_rdata = sel_iram_dbg ? iram_dbg_rdata :
+                      sel_dram_dbg ? dram_dbg_rdata :
+                                     32'h0000_0000;
 
 // ---------------------------------------------------------
 //  UART 例化
@@ -237,11 +269,12 @@ UART u_uart (
 
 // ---------------------------------------------------------
 //  数据总线读数据 MUX（组合逻辑）
-//  根据地址选择 SimRAM 或 UART 的读数据
+//  根据地址选择 UART、IRAM 或 DRAM 的读数据
 // ---------------------------------------------------------
-assign dbus_rdata = sel_uart    ? uart_rdata     :
-                    sel_sim_ram ? sim_ram_drdata  :
-                                  32'h0000_0000;
+assign dbus_rdata = sel_uart  ? uart_rdata  :
+                    sel_iram  ? iram_drdata :
+                    sel_dram  ? dram_drdata :
+                                32'h0000_0000;
 
 // ---------------------------------------------------------
 //  LED 调试指示（低有效，板载 6 个 LED）

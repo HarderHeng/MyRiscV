@@ -590,6 +590,18 @@ Step 6：完善 JTAG + Flash 引导（Phase 2 后期）
 
 ### 13.1 仿真命令
 
+推荐使用 Makefile（会自动管理所有源文件和路径）：
+
+```bash
+# 推荐方式：使用 Makefile
+source /home/heng/oss-cad-suite/environment
+make sim_soc    # SoC 仿真，验证 UART 输出 "Hello!\n"
+make sim_alu    # ALU 单元测试（36 项）
+make wave       # 打开 GTKWave 查看波形
+```
+
+手动编译（仿真时不加 `-DSYNTHESIS`，使用行为模型）：
+
 ```bash
 # 编译 SoC 仿真（OSS CAD Suite iverilog 使用 -I，不支持 +incdir+）
 iverilog -g2012 \
@@ -600,7 +612,8 @@ iverilog -g2012 \
     rtl/core/ex_mem.sv rtl/core/mem.sv rtl/core/mem_wb.sv \
     rtl/core/hazard.sv rtl/core/cpu_core.sv \
     rtl/debug/jtag_dtm.sv rtl/debug/debug_module.sv \
-    rtl/perips/uart.sv rtl/perips/sim_ram.sv \
+    rtl/perips/uart.sv rtl/perips/iram.sv rtl/perips/dram.sv \
+    rtl/perips/flash_ctrl.sv \
     rtl/soc/MyRiscV_soc_top.sv \
     sim/tb/tb_soc.sv \
     -o sim/out/tb_soc
@@ -611,6 +624,8 @@ vvp sim/out/tb_soc
 # 查看波形
 gtkwave sim/out/tb_soc.vcd
 ```
+
+> **注意**：仿真时不加 `-DSYNTHESIS`，`iram.sv`/`dram.sv`/`flash_ctrl.sv` 使用行为模型（组合读）而非 SDPB/FLASH608K 原语。
 
 ### 13.2 OpenOCD 连接配置（Phase 2）
 
@@ -645,7 +660,15 @@ riscv32-unknown-elf-gdb firmware.elf
 
 ---
 
-## 14. 参考规范
+## 14. 相关文档
+
+| 文档 | 路径 | 说明 |
+|------|------|------|
+| 快速使用指南 | [docs/quickstart.md](quickstart.md) | 上手流程、引脚连接、FPGA 烧录、UART/JTAG |
+| 仿真指南 | [docs/simulation.md](simulation.md) | 仿真命令、输出解读、调试技巧、FAQ |
+| 改进计划 | [docs/improvements.md](improvements.md) | 已知问题、优化方向、功能扩展路线图 |
+
+## 15. 参考规范
 
 | 文档 | 链接 | 说明 |
 |------|------|------|

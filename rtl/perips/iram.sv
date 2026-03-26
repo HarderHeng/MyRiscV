@@ -196,7 +196,6 @@ for (gi = 0; gi < 8; gi = gi + 1) begin : gen_sdpb
         .CLKA   (clk),
         .RESETA (1'b0),
         .CEA    (wr_wen & (wr_blksel == gi[2:0])),
-        .OCEA   (1'b0),
         .ADA    (wr_addra),
         .DI     (wr_wdata),
         .BLKSELA(wr_blksel),
@@ -204,7 +203,7 @@ for (gi = 0; gi < 8; gi = gi + 1) begin : gen_sdpb
         .CLKB   (clk),
         .RESETB (1'b0),
         .CEB    (1'b1),
-        .OCEB   (1'b1),
+        .OCE    (1'b1),
         .ADB    (rd_addrb),
         .DO     (bdo[gi]),
         .BLKSELB(rd_blksel)

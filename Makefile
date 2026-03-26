@@ -80,18 +80,21 @@ $(SYN_DIR)/out/$(PROJ).json: $(SYN_SRCS)
 
 pnr: $(SYN_DIR)/out/$(PROJ)_pnr.json
 
+GOWIN_CHIPDB = /home/heng/oss-cad-suite/share/nextpnr/himbaechel/gowin/chipdb-GW1N-9C.bin
+
 $(SYN_DIR)/out/$(PROJ)_pnr.json: $(SYN_DIR)/out/$(PROJ).json $(SYN_DIR)/constraints/$(PROJ).pcf
-	nextpnr-gowin \
+	nextpnr-himbaechel \
 	    --json $< \
 	    --write $@ \
 	    --device GW1NR-LV9QN88PC6/I5 \
-	    --family GW1N-9C \
-	    --pcf $(SYN_DIR)/constraints/$(PROJ).pcf
+	    --chipdb $(GOWIN_CHIPDB) \
+	    --vopt family=GW1N-9C \
+	    --vopt cst=$(SYN_DIR)/constraints/$(PROJ).pcf
 
 bitstream: $(SYN_DIR)/out/$(PROJ).fs
 
 $(SYN_DIR)/out/$(PROJ).fs: $(SYN_DIR)/out/$(PROJ)_pnr.json
-	gowin_pack --device GW1NR-LV9QN88PC6/I5 --input $< --output $@
+	gowin_pack -d GW1N-9C -o $@ $<
 
 prog: $(SYN_DIR)/out/$(PROJ).fs
 	openFPGALoader -b tangnano9k $<

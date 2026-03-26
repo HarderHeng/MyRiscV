@@ -84,8 +84,30 @@ module CpuCore (
             iram_wait <= 1'b1;
     end
 
-    // IF 暂停：Load-use stall 或 调试 halt 或 IRAM 等待
-    wire if_hold = load_use_stall | dbg_halted | iram_wait;
+    // RegFile SDPB 同步读等待：IFID 推进后等 1 周期，确保 SDPB 读出数据稳定
+    // 仿真路径：regfile_wait_r 恒为 0（RegFile.regfile_wait=0，不触发）
+    // 综合路径：IFID 每次推进（!if_hold_pre，即 iram_wait 解除的下一拍），
+    //           等 1 拍让 SDPB B 口输出锁存
+    // 实现：regfile_wait_r 在 IFID 推进沿的下一拍为 1，随后清零
+    //       if_hold_pre：不含 regfile_wait_r 的暂停信号，用于检测 IFID 推进
+    wire if_hold_pre = load_use_stall | dbg_halted | iram_wait;
+
+`ifdef SYNTHESIS
+    reg regfile_wait_r;
+    always @(posedge clk) begin
+        if (rst)
+            regfile_wait_r <= 1'b1;   // 复位后同样等 1 拍
+        else if (regfile_wait_r)
+            regfile_wait_r <= 1'b0;
+        else if (!if_hold_pre)        // IFID 推进 → 下一拍等读数据
+            regfile_wait_r <= 1'b1;
+    end
+`else
+    wire regfile_wait_r = 1'b0;
+`endif
+
+    // IF 暂停：Load-use stall 或 调试 halt 或 IRAM 等待 或 RegFile 读等待
+    wire if_hold = if_hold_pre | regfile_wait_r;
 
     // IF/ID 冲刷：分支成立时冲刷（但 load_use_stall 优先，避免误冲刷）
     wire ifid_flush = branch_flush && !load_use_stall;
@@ -143,20 +165,21 @@ module CpuCore (
     wire [31:0] id_reg_rdata2;
 
     RegFile u_regfile (
-        .clk        (clk),
-        .rst        (rst),
-        .raddr1     (id_reg_raddr1),
-        .rdata1     (id_reg_rdata1),
-        .raddr2     (id_reg_raddr2),
-        .rdata2     (id_reg_rdata2),
-        .wen        (wb_reg_wen),
-        .waddr      (wb_reg_waddr),
-        .wdata      (wb_reg_wdata),
-        .dbg_raddr  (dbg_reg_raddr),
-        .dbg_rdata  (dbg_reg_rdata),
-        .dbg_wen    (dbg_reg_wen),
-        .dbg_waddr  (dbg_reg_waddr),
-        .dbg_wdata  (dbg_reg_wdata)
+        .clk          (clk),
+        .rst          (rst),
+        .raddr1       (id_reg_raddr1),
+        .rdata1       (id_reg_rdata1),
+        .raddr2       (id_reg_raddr2),
+        .rdata2       (id_reg_rdata2),
+        .wen          (wb_reg_wen),
+        .waddr        (wb_reg_waddr),
+        .wdata        (wb_reg_wdata),
+        .dbg_raddr    (dbg_reg_raddr),
+        .dbg_rdata    (dbg_reg_rdata),
+        .dbg_wen      (dbg_reg_wen),
+        .dbg_waddr    (dbg_reg_waddr),
+        .dbg_wdata    (dbg_reg_wdata),
+        .regfile_wait ()   // cpu_core 内部 regfile_wait_r 已处理，此端口不使用
     );
 
     // ===========================================================

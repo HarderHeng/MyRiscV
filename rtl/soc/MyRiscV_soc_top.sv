@@ -183,7 +183,8 @@ DebugModule u_debug_module (
 // ---------------------------------------------------------
 //  IRAM 例化（16KB，0x80000000 ~ 0x80003FFF）
 // ---------------------------------------------------------
-wire [31:0] iram_drdata;
+wire [31:0] iram_irdata;  // 指令端口输出
+wire [31:0] iram_drdata;  // 数据端口输出
 wire [31:0] iram_dbg_rdata;
 
 // 地址译码
@@ -208,14 +209,14 @@ IRAM u_iram (
     .clk        (clk),
     // 指令端口（来自 CPU IF，始终连接）
     .iaddr      (iram_addr),
-    .idata      (iram_rdata),
+    .idata      (iram_irdata),  // 指令端口输出
     // 数据端口（来自 CPU MEM）
     .daddr      (dbus_addr),
     .dren       (dbus_ren  & sel_iram),
     .dwen       (dbus_wen  & sel_iram),
     .dbe        (dbus_be),
     .dwdata     (dbus_wdata),
-    .drdata     (iram_drdata),
+    .drdata     (iram_drdata),  // 数据端口输出
     // 调试端口（来自 DebugModule SBA）
     .dbg_addr   (dm_sba_addr),
     .dbg_ren    (dm_sba_ren  & sel_iram_dbg),
@@ -279,14 +280,31 @@ UART u_uart (
 wire [31:0] flash_rdata;
 wire        flash_rdata_vld;
 
+// Flash 指令读接口（XIP：CPU 取指）
+wire [31:0] flash_irdata;
+wire        flash_irdata_vld;
+
+// Flash 取指译码：iram_addr[31:17] == 15'h1000 (0x20000000 ~ 0x2012FFFF)
+wire sel_flash_if = (iram_addr[31:17] == 15'h1000);
+
 FlashCtrl u_flash_ctrl (
     .clk           (clk),
     .rst           (rst),
+    // 指令端口（CPU 取指）
+    .iaddr         (iram_addr),
+    .iren          (sel_flash_if),
+    .irdata        (flash_irdata),
+    .irdata_vld    (flash_irdata_vld),
+    // 数据端口（CPU 读写）
     .cpu_addr      (dbus_addr),
     .cpu_ren       (dbus_ren & sel_flash),
     .cpu_rdata     (flash_rdata),
     .cpu_rdata_vld (flash_rdata_vld)
 );
+
+// IRAM/Flash 数据 MUX（指令读数据）
+// Flash 访问时选通 flash_irdata，否则选通 IRAM 指令端口
+assign iram_rdata = sel_flash_if ? flash_irdata : iram_irdata;
 
 // ---------------------------------------------------------
 //  数据总线读数据 MUX（组合逻辑）

@@ -12,7 +12,8 @@
 `define CsrAddrWidth    11:0    // CSR 地址宽度
 
 // CPU 复位后取指地址
-`define CpuResetAddr    32'h80000000
+// Flash 启动：0x20000000 | IRAM 启动：0x80000000
+`define CpuResetAddr    32'h20000000
 
 // ============================================================
 //  Opcode 定义（instruction[6:0]）

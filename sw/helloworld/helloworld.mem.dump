@@ -1,0 +1,51 @@
+
+helloworld.elf:     file format elf32-littleriscv
+
+Sections:
+Idx Name          Size      VMA       LMA       File off  Algn
+  0 .text         00000054  80000000  80000000  00001000  2**2
+                  CONTENTS, ALLOC, LOAD, READONLY, CODE
+  1 .rodata       00000010  80000054  80000054  00001054  2**0
+                  CONTENTS, ALLOC, LOAD, READONLY, DATA
+  2 .bss          00000000  80004000  80004000  00002000  2**0
+                  ALLOC
+  3 .riscv.attributes 0000001a  00000000  00000000  00001064  2**0
+                  CONTENTS, READONLY
+
+helloworld.elf:     file format elf32-littleriscv
+
+
+Disassembly of section .text:
+
+80000000 <_start>:
+80000000:	80006137          	lui	sp,0x80006
+80000004:	008000ef          	jal	8000000c <main>
+
+80000008 <halt_loop>:
+80000008:	0000006f          	j	80000008 <halt_loop>
+
+8000000c <main>:
+8000000c:	ff010113          	addi	sp,sp,-16 # 80005ff0 <_bss_end+0x1ff0>
+80000010:	00112623          	sw	ra,12(sp)
+80000014:	00000297          	auipc	t0,0x0
+80000018:	04028293          	addi	t0,t0,64 # 80000054 <main_end>
+
+8000001c <putchar_loop>:
+8000001c:	0002c303          	lbu	t1,0(t0)
+80000020:	02030463          	beqz	t1,80000048 <putchar_done>
+
+80000024 <wait_tx_ready>:
+80000024:	100003b7          	lui	t2,0x10000
+80000028:	00838393          	addi	t2,t2,8 # 10000008 <UART_BASE+0x8>
+8000002c:	0003ae03          	lw	t3,0(t2)
+80000030:	001e7e13          	andi	t3,t3,1
+80000034:	fe0e08e3          	beqz	t3,80000024 <wait_tx_ready>
+80000038:	100003b7          	lui	t2,0x10000
+8000003c:	0063a023          	sw	t1,0(t2) # 10000000 <UART_BASE>
+80000040:	00128293          	addi	t0,t0,1
+80000044:	fd9ff06f          	j	8000001c <putchar_loop>
+
+80000048 <putchar_done>:
+80000048:	00c12083          	lw	ra,12(sp)
+8000004c:	01010113          	addi	sp,sp,16
+80000050:	00008067          	ret

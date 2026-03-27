@@ -1,0 +1,53 @@
+
+There are no discarded input sections
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+FLASH            0x20000000         0x00013000         xr
+DRAM             0x80004000         0x00002000         xrw
+*default*        0x00000000         0xffffffff
+
+Linker script and memory map
+
+
+.text           0x20000000       0x54
+ *(.text)
+ .text          0x20000000       0x54 /tmp/ccVU6ODq.o
+                0x20000000                _start
+                0x2000000c                main
+ *(.text.*)
+                0x20000054                        . = ALIGN (0x4)
+
+.rodata         0x20000054       0x10
+ *(.rodata)
+ .rodata        0x20000054        0xf /tmp/ccVU6ODq.o
+ *(.rodata.*)
+                0x20000064                        . = ALIGN (0x4)
+ *fill*         0x20000063        0x1 
+
+.data           0x80004000        0x0 load address 0x20000064
+                0x80004000                        _data_start = .
+ *(.data)
+ .data          0x80004000        0x0 /tmp/ccVU6ODq.o
+ *(.data.*)
+                0x80004000                        . = ALIGN (0x4)
+                0x80004000                        _data_end = .
+
+.bss            0x80004000        0x0 load address 0x20000064
+                0x80004000                        _bss_start = .
+ *(.bss)
+ .bss           0x80004000        0x0 /tmp/ccVU6ODq.o
+ *(.bss.*)
+ *(COMMON)
+                0x80004000                        . = ALIGN (0x4)
+                0x80004000                        _bss_end = .
+                0x80006000                        _stack_top = (ORIGIN (DRAM) + LENGTH (DRAM))
+                0x20000064                        _data_loadaddr = LOADADDR (.data)
+LOAD /tmp/ccVU6ODq.o
+OUTPUT(helloworld.elf elf32-littleriscv)
+
+.riscv.attributes
+                0x00000000       0x1a
+ .riscv.attributes
+                0x00000000       0x1a /tmp/ccVU6ODq.o

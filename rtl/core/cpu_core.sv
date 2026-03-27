@@ -72,17 +72,37 @@ module CpuCore (
     wire        ex_jmp;
     wire [31:0] ex_jmp_addr;
 
-    // IRAM 同步读等待：复位后等 1 周期；EX 跳转后等 1 周期
-    // 确保 SDPB/行为模型同步输出在 IFID 寄存器采样前已稳定
-    reg iram_wait;
+    // Flash 访问检测：addr[31:29] == 3'b0010 (0x2xxxxxxx)
+    wire is_flash_access = (iram_addr[31:29] == 3'b0010);
+
+    // IRAM/Flash 同步读等待逻辑
+    // 综合路径：Flash 需要 2 周期延迟，IRAM 需要 1 周期
+    // 仿真路径：Flash 和 IRAM 都是组合读，不需要额外等待
+`ifdef SYNTHESIS
+    reg wait_state;
+    reg flash_wait_state;
     always @(posedge clk) begin
-        if (rst)
-            iram_wait <= 1'b1;
-        else if (iram_wait)
-            iram_wait <= 1'b0;
-        else if (ex_jmp && !load_use_stall && !dbg_halted)
-            iram_wait <= 1'b1;
+        if (rst) begin
+            wait_state       <= 1'b1;
+            flash_wait_state <= 1'b0;
+        end else if (wait_state) begin
+            wait_state <= 1'b0;
+            if (is_flash_access)
+                flash_wait_state <= 1'b1;
+            else
+                flash_wait_state <= 1'b0;
+        end else if (flash_wait_state) begin
+            flash_wait_state <= 1'b0;
+        end else if (ex_jmp && !load_use_stall && !dbg_halted) begin
+            wait_state       <= 1'b1;
+            flash_wait_state <= 1'b0;
+        end
     end
+    wire if_hold_pre = load_use_stall | dbg_halted | wait_state | flash_wait_state;
+`else
+    // 仿真模式：无等待
+    wire if_hold_pre = load_use_stall | dbg_halted;
+`endif
 
     // RegFile SDPB 同步读等待：IFID 推进后等 1 周期，确保 SDPB 读出数据稳定
     // 仿真路径：regfile_wait_r 恒为 0（RegFile.regfile_wait=0，不触发）
@@ -90,8 +110,6 @@ module CpuCore (
     //           等 1 拍让 SDPB B 口输出锁存
     // 实现：regfile_wait_r 在 IFID 推进沿的下一拍为 1，随后清零
     //       if_hold_pre：不含 regfile_wait_r 的暂停信号，用于检测 IFID 推进
-    wire if_hold_pre = load_use_stall | dbg_halted | iram_wait;
-
 `ifdef SYNTHESIS
     reg regfile_wait_r;
     always @(posedge clk) begin

@@ -1,5 +1,6 @@
 `ifndef UART_SV
 `define UART_SV
+`timescale 1ns/1ps
 
 // ============================================================
 //  简单 8N1 UART 控制器
@@ -50,6 +51,14 @@ localparam TX_D6    = 4'd8;
 localparam TX_D7    = 4'd9;
 localparam TX_STOP  = 4'd10;
 
+// Debug: state transition tracking
+reg [3:0] prev_tx_state;
+reg [31:0] tx_state_change_time;
+initial begin
+    prev_tx_state = TX_IDLE;
+    tx_state_change_time = 0;
+end
+
 reg [3:0]  tx_state;
 reg [7:0]  tx_data;        // 待发送数据寄存器
 reg [15:0] tx_clk_cnt;     // 位时钟计数器
@@ -57,6 +66,14 @@ reg        tx_out;         // TX 串行输出
 
 // TX 忙标志：非 IDLE 状态即为忙
 wire tx_busy = (tx_state != TX_IDLE);
+
+// Debug: track state transitions
+reg [3:0] prev_debug_state;
+reg [31:0] last_state_change_time;
+initial begin
+    prev_debug_state = TX_IDLE;
+    last_state_change_time = 0;
+end
 
 // uart_tx 驱动
 assign uart_tx = tx_out;

@@ -9,6 +9,7 @@
 // =============================================================
 `ifndef CPU_CORE_SV
 `define CPU_CORE_SV
+`timescale 1ns/1ps
 
 `include "core_define.svh"
 

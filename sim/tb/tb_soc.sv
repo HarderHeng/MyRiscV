@@ -18,9 +18,33 @@ module tb_soc;
 
 // ---------------------------------------------------------
 //  时钟生成（27 MHz，周期约 37.037 ns，half = 18 ns）
+
+// ---------------------------------------------------------
+//  CPU 活动监控
+// ---------------------------------------------------------
+reg [31:0] cycle_count;
+reg [31:0] last_uart_write;
+initial begin
+    cycle_count = 0;
+    last_uart_write = 0;
+end
+always @(posedge clk) begin
+    cycle_count <= cycle_count + 1;
+end
 // ---------------------------------------------------------
 reg clk = 1'b0;
-always #18 clk = ~clk;  // 18ns half-period → 36ns period ≈ 27.78 MHz（近似 27 MHz）
+reg [31:0] sim_cycle;
+reg [31:0] last_pc;
+reg [31:0] pc_change_count;
+initial begin
+    sim_cycle = 0;
+    last_pc = 0;
+    pc_change_count = 0;
+end
+always #18 clk = ~clk;
+always @(posedge clk) begin
+    sim_cycle <= sim_cycle + 1;
+end  // 18ns half-period → 36ns period ≈ 27.78 MHz（近似 27 MHz）
 
 // ---------------------------------------------------------
 //  复位（低有效）
@@ -45,6 +69,76 @@ assign uart_rx = 1'b1;
 // ---------------------------------------------------------
 //  DUT 例化
 // ---------------------------------------------------------
+// ---------------------------------------------------------
+//  PC and UART Monitoring
+// ---------------------------------------------------------
+reg [31:0] dbg_pc;
+reg [31:0] dbg_pc_prev;
+reg [31:0] pc_stuck_count;
+reg [7:0] dbg_tx_char;
+reg dbg_tx_wr;
+reg [31:0] uart_write_count;
+reg [31:0] last_uart_write_time;
+reg [31:0] last_uart_char;
+reg [3:0] prev_tx_state;
+reg tx_state_started;
+
+initial begin
+    dbg_pc_prev = 0;
+    pc_stuck_count = 0;
+    dbg_tx_char = 0;
+    dbg_tx_wr = 0;
+    uart_write_count = 0;
+    last_uart_write_time = 0;
+    last_uart_char = 0;
+    prev_tx_state = 0;
+    tx_state_started = 0;
+end
+
+always @(posedge clk) begin
+    dbg_pc <= u_dut.u_cpu.u_if.pc;
+    if (dbg_pc == dbg_pc_prev && u_dut.rst) begin
+        pc_stuck_count <= pc_stuck_count + 1;
+    end else begin
+        pc_stuck_count <= 0;
+    end
+    dbg_pc_prev <= dbg_pc;
+
+    // Detect TX state machine leaving IDLE
+    if (prev_tx_state == 0 && u_dut.u_uart.tx_state != 0 && !tx_state_started) begin
+        tx_state_started <= 1;
+        $display("[TX STATE] First TX started! state=%d tx_data=0x%02h at time %0t ns",
+                 u_dut.u_uart.tx_state, u_dut.u_uart.tx_data, $time);
+    end
+    prev_tx_state <= u_dut.u_uart.tx_state;
+
+    // Monitor UART TX state - detect character sends
+    if (u_dut.u_uart.tx_state == 1 && u_dut.u_uart.tx_clk_cnt == 0) begin
+        // TX_START state beginning - this is when a new char is loaded
+        uart_write_count <= uart_write_count + 1;
+        last_uart_write_time <= $time;
+        last_uart_char <= u_dut.u_uart.tx_data;
+        $display("[UART WRITE] #%0d char=0x%02h '%c' at time %0t ns, PC=0x%h",
+                 uart_write_count + 1, u_dut.u_uart.tx_data,
+                 (u_dut.u_uart.tx_data >= 32 && u_dut.u_uart.tx_data < 127) ? u_dut.u_uart.tx_data : ".",
+                 $time, u_dut.u_cpu.u_if.pc);
+    end
+
+    // Monitor UART STAT reads (dbus_addr == 0x10000008 and dbus_ren)
+    if (u_dut.u_cpu.dbus_ren && u_dut.u_cpu.dbus_addr == 32'h10000008) begin
+        $display("[UART STAT READ] data=0x%h at time %0t ns, PC=0x%h",
+                 u_dut.u_cpu.dbus_rdata, $time, u_dut.u_cpu.u_if.pc);
+    end
+
+    // Monitor UART TX writes (dbus_addr == 0x10000000 and dbus_wen)
+    if (u_dut.u_cpu.dbus_wen && u_dut.u_cpu.dbus_addr == 32'h10000000) begin
+        $display("[UART TX WRITE] data=0x%02h '%c' at time %0t ns, PC=0x%h",
+                 u_dut.u_cpu.dbus_wdata[7:0],
+                 (u_dut.u_cpu.dbus_wdata[7:0] >= 32 && u_dut.u_cpu.dbus_wdata[7:0] < 127) ? u_dut.u_cpu.dbus_wdata[7:0] : ".",
+                 $time, u_dut.u_cpu.u_if.pc);
+    end
+end
+
 MyRiscV_soc_top u_dut (
     .clk         (clk),
     .rst_n       (rst_n),
@@ -56,6 +150,8 @@ MyRiscV_soc_top u_dut (
     .jtag_tdi    (1'b1),
     .jtag_tdo    (jtag_tdo),
     .jtag_trst_n (1'b1),
+    .gpio_out    (),
+    .gpio_in     (32'h0),
     .led         (led)
 );
 
@@ -144,15 +240,33 @@ initial begin
     #10_000_000;  // 10ms
     $display("[TIMEOUT] Simulation timeout at 10ms, did not receive '\\n'");
     $display("          Received %0d characters total", char_count);
-    $display("[DEBUG] PC = %h, iram_addr = %h", u_dut.u_cpu_core.dbg_pc, u_dut.iram_addr);
-    $display("[DEBUG] sel_flash_if = %b, flash_irdata_vld = %b, iram_drdata = %h",
-             u_dut.sel_flash_if, u_dut.flash_irdata_vld, u_dut.iram_drdata);
-    $display("[DEBUG] First 5 instructions from Flash:");
-    $display("  0x20000000: %h", u_dut.u_flash_ctrl.flash_mem[0]);
-    $display("  0x20000004: %h", u_dut.u_flash_ctrl.flash_mem[1]);
-    $display("  0x20000008: %h", u_dut.u_flash_ctrl.flash_mem[2]);
-    $display("  0x2000000C: %h", u_dut.u_flash_ctrl.flash_mem[3]);
-    $display("  0x20000010: %h", u_dut.u_flash_ctrl.flash_mem[4]);
+    $display("[DEBUG] led = %b", u_dut.led);
+    $display("[DEBUG] Instruction at flash[0] = 0x%h", u_dut.u_flash.flash_mem[0]);
+    $display("[DEBUG] Instruction at flash[1] = 0x%h", u_dut.u_flash.flash_mem[1]);
+    $display("  flash[0] = 0x%h (PC=0x20000000)", u_dut.u_flash.flash_mem[0]);
+    $display("  flash[1] = 0x%h (PC=0x20000004)", u_dut.u_flash.flash_mem[1]);
+    $display("  flash[2] = 0x%h (PC=0x20000008)", u_dut.u_flash.flash_mem[2]);
+    $display("  flash[3] = 0x%h (PC=0x2000000c)", u_dut.u_flash.flash_mem[3]);
+    $display("  flash[4] = 0x%h (PC=0x20000010)", u_dut.u_flash.flash_mem[4]);
+    $display("  flash[5] = 0x%h (PC=0x20000014)", u_dut.u_flash.flash_mem[5]);
+    $display("  flash[6] = 0x%h (PC=0x20000018)", u_dut.u_flash.flash_mem[6]);
+    $display("  flash[7] = 0x%h (PC=0x2000001c)", u_dut.u_flash.flash_mem[7]);
+    $display("  flash[21] = 0x%h (string 'Hell')", u_dut.u_flash.flash_mem[21]);
+    $display("  flash[22] = 0x%h (string 'o, W')", u_dut.u_flash.flash_mem[22]);
+    $display("  flash[23] = 0x%h (string 'orld')", u_dut.u_flash.flash_mem[23]);
+    $display("  flash[24] = 0x%h (string end)", u_dut.u_flash.flash_mem[24]);
+    $display("  flash[25] = 0x%h (should be 0)", u_dut.u_flash.flash_mem[25]);
+    
+    // Debug: Check if CPU is fetching instructions
+    $display("[DEBUG] CPU state at timeout:");
+    $display("  iram_addr at timeout = 0x%h", u_dut.u_cpu.u_if.pc);
+    $display("  dbg_pc_stuck = %d", pc_stuck_count);
+    $display("  dbus_addr = 0x%h", u_dut.u_cpu.dbus_addr);
+    $display("  CPU if_id state: inst=0x%h, pc=0x%h", 
+             u_dut.u_cpu.u_if_id.id_inst, u_dut.u_cpu.u_if_id.id_pc);
+    $display("  UART tx_state=%d, tx_busy=%d", 
+             u_dut.u_uart.tx_state, u_dut.u_uart.tx_busy);
+    $display("  dbus_ren = %b, dbus_wen = %b", u_dut.u_cpu.dbus_ren, u_dut.u_cpu.dbus_wen);
     $finish;
 end
 
@@ -162,9 +276,6 @@ end
 initial begin
     $display("[INFO] tb_soc started. Clock=27MHz, UART=115200bps");
     $display("[INFO] Reset released at time %0t ns", $time);
-    @(posedge rst_n);
-    #1;
-    $display("[INFO] PC after reset = %h, iram_addr = %h", u_dut.u_cpu_core.dbg_pc, u_dut.iram_addr);
 end
 
 // 监测 LED 变化（可选调试信息）

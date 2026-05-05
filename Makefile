@@ -11,7 +11,7 @@ INCDIRS = -I$(RTL_DIR)/alu -I$(RTL_DIR)/core
 # include 路径（Yosys 格式，使用 -I）
 INCDIRS_YOSYS = -I$(RTL_DIR)/alu -I$(RTL_DIR)/core
 
-# RTL 源文件列表（仿真和综合共用，使用 IRAM+DRAM）
+# RTL 源文件列表（仿真和综合共用）
 SIM_SRCS = \
     $(RTL_DIR)/alu/alu.sv \
     $(RTL_DIR)/core/regfile.sv \
@@ -28,9 +28,11 @@ SIM_SRCS = \
     $(RTL_DIR)/debug/jtag_dtm.sv \
     $(RTL_DIR)/debug/debug_module.sv \
     $(RTL_DIR)/perips/uart.sv \
+    $(RTL_DIR)/perips/gpio.sv \
     $(RTL_DIR)/perips/iram.sv \
     $(RTL_DIR)/perips/dram.sv \
     $(RTL_DIR)/perips/flash_ctrl.sv \
+    $(RTL_DIR)/soc/simple_bus.sv \
     $(RTL_DIR)/soc/MyRiscV_soc_top.sv
 
 # RTL 源文件列表（FPGA 综合用，同 SIM_SRCS）

@@ -1,5 +1,6 @@
 `ifndef IRAM_SV
 `define IRAM_SV
+`timescale 1ns/1ps
 
 // ============================================================
 //  IRAM（Instruction RAM）16KB

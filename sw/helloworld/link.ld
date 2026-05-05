@@ -15,6 +15,7 @@ MEMORY {
 SECTIONS {
     /* 代码段：放在 Flash */
     .text : {
+        *(.text.start)
         *(.text)
         *(.text.*)
         . = ALIGN(4);

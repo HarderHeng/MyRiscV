@@ -1,0 +1,44 @@
+# TangNano-9K Pin Constraints for MyRiscV SoC
+# Device: GW1NR-LV9QN88PC6/I5
+
+# Clock - 27MHz crystal oscillator
+set_io clk 52
+
+# Reset - Active low push button
+set_io rst_n 13
+
+# UART
+set_io uart_tx 1
+set_io uart_rx 4
+
+# JTAG Debug Interface
+set_io jtag_tck 2
+set_io jtag_tms 3
+set_io jtag_tdi 14
+set_io jtag_tdo 11
+set_io jtag_trst_n 15
+
+# LEDs
+set_io led[0] 10
+set_io led[1] 11
+set_io led[2] 16
+set_io led[3] 17
+set_io led[4] 18
+set_io led[5] 19
+
+# GPIO (optional expansion)
+# Pmod header pins
+set_io gpio_out[0] 21
+set_io gpio_out[1] 22
+set_io gpio_out[2] 23
+set_io gpio_out[3] 24
+set_io gpio_in[0] 25
+set_io gpio_in[1] 26
+set_io gpio_in[2] 27
+set_io gpio_in[3] 28
+
+# Clock constraint - 27MHz
+set_clock -period 37.037 clk
+
+# IO standards
+set_io -pullup yes rst_n

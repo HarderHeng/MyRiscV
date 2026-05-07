@@ -195,7 +195,7 @@ module MyRiscV_soc_top (
         .clk    (clk),
         .rst    (rst),
 
-        .addr   (dbus_addr[4:2]),
+        .addr   ({2'b0, dbus_addr[4:2]}),
         .wen    (dbus_wen & sel_uart),
         .ren    (dbus_ren & sel_uart),
         .wdata  (dbus_wdata),

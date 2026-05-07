@@ -73,8 +73,8 @@ module CpuCore (
     wire        ex_jmp;
     wire [31:0] ex_jmp_addr;
 
-    // Flash 访问检测：addr[31:29] == 3'b0010 (0x2xxxxxxx)
-    wire is_flash_access = (iram_addr[31:29] == 3'b0010);
+    // Flash 访问检测：addr[31:29] == 3'b010 (0x2xxxxxxx)
+    wire is_flash_access = (iram_addr[31:29] == 3'b010);
 
     // IRAM/Flash 同步读等待逻辑
     // 综合路径：Flash 需要 2 周期延迟，IRAM 需要 1 周期
